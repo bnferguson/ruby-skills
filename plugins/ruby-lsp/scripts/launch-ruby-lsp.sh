@@ -34,11 +34,25 @@ fi
 # Build activation prefix
 ACTIVATION="${ACTIVATION_COMMAND:-true}"
 
+# Detect wrapper-style managers (e.g. "mise x --") that expect the command appended directly
+IS_WRAPPER=false
+if [[ "$ACTIVATION" == *" --" ]]; then
+    IS_WRAPPER=true
+fi
+
+# Helper: run a command with the version manager activated
+run_with_activation() {
+    if $IS_WRAPPER; then
+        bash -c "$ACTIVATION $*"
+    else
+        bash -c "$ACTIVATION && $*"
+    fi
+}
+
 # Check if ruby-lsp is installed, install if needed
-# Use subshell with set +u to isolate from parent's set -u (some version managers use undefined vars)
-if ! (set +u; eval "$ACTIVATION && command -v ruby-lsp") &>/dev/null; then
+if ! run_with_activation "command -v ruby-lsp" &>/dev/null; then
     echo "ruby-lsp: Installing gem..." >&2
-    if ! bash -c "$ACTIVATION && gem install ruby-lsp" >&2; then
+    if ! run_with_activation "gem install ruby-lsp" >&2; then
         echo "Error: Failed to install ruby-lsp gem" >&2
         exit 1
     fi
@@ -46,4 +60,8 @@ if ! (set +u; eval "$ACTIVATION && command -v ruby-lsp") &>/dev/null; then
 fi
 
 # Launch ruby-lsp with version manager activation
-exec bash -c "$ACTIVATION && exec ruby-lsp"
+if $IS_WRAPPER; then
+    exec bash -c "$ACTIVATION ruby-lsp"
+else
+    exec bash -c "$ACTIVATION && exec ruby-lsp"
+fi
